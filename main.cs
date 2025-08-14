@@ -54,10 +54,9 @@ namespace TelegramBot
         {
             if (update.Message?.Chat.Type is ChatType.Group or ChatType.Supergroup)
             {
-                // Получаем основной текст ИЛИ подпись медиа
+                // Основной текст или подпись медиа
                 string content = update.Message.Text ?? update.Message.Caption ?? "";
                 
-                // Пропускаем, если контент пустой
                 if (string.IsNullOrEmpty(content))
                 {
                     _logger.LogInformation("Received empty content, skipping.");
@@ -70,10 +69,10 @@ namespace TelegramBot
                 bool isMention = false;
                 string? matchedMention = null;
 
-                // 1. Проверяем на плохие слова в тексте или подписи
+                // Проверка сообщения на слова в бан листе или подписи
                 isBadWord = BANLIST.Any(word => content.ToLower().Contains(word.ToLower()));
 
-                // 2. Проверяем сущности в основном тексте
+                // Проверка сущностей сущности в основном тексте
                 if (update.Message.Entities != null)
                 {
                     foreach (var entity in update.Message.Entities)
@@ -81,7 +80,7 @@ namespace TelegramBot
                         if (entity.Type == MessageEntityType.Mention)
                         {
                             string mention = content.Substring(entity.Offset, entity.Length).ToLower();
-                            if (BANLIST.Contains(mention[1..])) // Убираем '@'
+                            if (BANLIST.Contains(mention[1..]))
                             {
                                 isMention = true;
                                 matchedMention = mention;
@@ -91,7 +90,7 @@ namespace TelegramBot
                     }
                 }
 
-                // 3. Проверяем сущности в подписи (для медиа)
+                // Проверка сущности в подписи (для медиа)
                 if (!isMention && update.Message.CaptionEntities != null)
                 {
                     foreach (var entity in update.Message.CaptionEntities)
@@ -111,7 +110,7 @@ namespace TelegramBot
 
                 _logger.LogInformation($"Checks: isMention={isMention} (matched: {matchedMention ?? "none"}), isBadWord={isBadWord}");
 
-                // Удаляем сообщение, если есть плохое слово или запрещённое упоминание
+                // Удаление сообщения, если есть слово или упоминание в бан листе
                 if (isMention || isBadWord)
                 {
                     try
