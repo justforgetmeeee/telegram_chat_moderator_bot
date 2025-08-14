@@ -55,18 +55,25 @@ namespace TelegramBot
             if (update.Message?.Chat.Type is ChatType.Group or ChatType.Supergroup)
             {
                 // Получаем основной текст ИЛИ подпись медиа
-                string content = 
-                    update.Message.Text ?? 
-                    update.Message.Caption ?? 
-                    "";
+                string content = update.Message.Text ?? update.Message.Caption ?? "";
+                
+                // Пропускаем, если контент пустой
+                if (string.IsNullOrEmpty(content))
+                {
+                    _logger.LogInformation("Received empty content, skipping.");
+                    return;
+                }
 
                 _logger.LogInformation($"Received content: {content}");
 
-                bool isMention = false;
                 bool isBadWord = false;
+                bool isMention = false;
                 string? matchedMention = null;
 
-                // 1. Проверяем сущности в основном тексте
+                // 1. Проверяем на плохие слова в тексте или подписи
+                isBadWord = BANLIST.Any(word => content.ToLower().Contains(word.ToLower()));
+
+                // 2. Проверяем сущности в основном тексте
                 if (update.Message.Entities != null)
                 {
                     foreach (var entity in update.Message.Entities)
@@ -84,7 +91,7 @@ namespace TelegramBot
                     }
                 }
 
-                // 2. Проверяем сущности в ПОДПИСИ (для медиа)
+                // 3. Проверяем сущности в подписи (для медиа)
                 if (!isMention && update.Message.CaptionEntities != null)
                 {
                     foreach (var entity in update.Message.CaptionEntities)
@@ -102,13 +109,9 @@ namespace TelegramBot
                     }
                 }
 
-                // 3. Проверяем текст/подпись на плохие слова
-                isBadWord = BANLIST.Any(word => 
-                    content.ToLower().Contains(word.ToLower())
-                );
+                _logger.LogInformation($"Checks: isMention={isMention} (matched: {matchedMention ?? "none"}), isBadWord={isBadWord}");
 
-                _logger.LogInformation($"Checks: isMention={isMention}, isBadWord={isBadWord}");
-
+                // Удаляем сообщение, если есть плохое слово или запрещённое упоминание
                 if (isMention || isBadWord)
                 {
                     try
@@ -118,12 +121,12 @@ namespace TelegramBot
                             messageId: update.Message.MessageId,
                             cancellationToken: cancellationToken);
 
-                        _logger.LogInformation($"Deleted message from @{update.Message.From?.Username}");
+                        _logger.LogInformation($"Deleted message from @{update.Message.From?.Username ?? "Unknown"}. Reason: {(isMention ? $"Banned mention: {matchedMention}" : "Banned word")}");
 
-                        /*await botClient.SendMessage(
+                        /*await botClient.SendTextMessageAsync(
                             chatId: update.Message.Chat.Id,
                             text: $"Сообщение от @{update.Message.From?.Username ?? "Unknown"} удалено.",
-                            cancellationToken: cancellationToken);*/ // Отправка сообщения от кого было удалено сообщение
+                            cancellationToken: cancellationToken);*/
                     }
                     catch (ApiRequestException ex)
                     {
