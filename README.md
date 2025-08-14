@@ -18,7 +18,7 @@
 Копирование репозитория
 
 ```bash
-  https://github.com/justforgetmeeee/telegram_chat_moderator_bot.git
+  git clone https://github.com/justforgetmeeee/telegram_chat_moderator_bot.git
 ```
 
 Переход в папку проекта
