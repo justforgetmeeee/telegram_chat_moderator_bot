@@ -1,4 +1,4 @@
-﻿using Telegram.Bot;
+using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -9,7 +9,7 @@ namespace TelegramBot
 {
     class Program
     {
-        private static readonly string TOKEN = "";
+        private static readonly string TOKEN = "8341488531:AAHWLr656LN476mYHpEapn_aAv1eeVmjz0s";
         private static List<string> BANLIST = new List<string>();
         private static readonly ILogger<Program> _logger;
 
@@ -50,38 +50,66 @@ namespace TelegramBot
             }
         }
 
-        static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken) // Логирование сообщений
+        static async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
-            if (update.Message?.Chat.Type is ChatType.Group or ChatType.Supergroup) // Проверка типа группы
+            if (update.Message?.Chat.Type is ChatType.Group or ChatType.Supergroup)
             {
-                string messageText = update.Message.Text ?? "";
-                _logger.LogInformation($"Received message: Chat={update.Message.Chat.Type}, Text={messageText}, Entities={update.Message.Entities?.Length ?? 0}");
+                // Получаем основной текст ИЛИ подпись медиа
+                string content = 
+                    update.Message.Text ?? 
+                    update.Message.Caption ?? 
+                    "";
+
+                _logger.LogInformation($"Received content: {content}");
 
                 bool isMention = false;
+                bool isBadWord = false;
                 string? matchedMention = null;
+
+                // 1. Проверяем сущности в основном тексте
                 if (update.Message.Entities != null)
                 {
                     foreach (var entity in update.Message.Entities)
                     {
                         if (entity.Type == MessageEntityType.Mention)
                         {
-                            string mentionText = messageText.Substring(entity.Offset, entity.Length).ToLower();
-                            string username = mentionText.Substring(1);
-                            if (BANLIST.Contains(username))
+                            string mention = content.Substring(entity.Offset, entity.Length).ToLower();
+                            if (BANLIST.Contains(mention[1..])) // Убираем '@'
                             {
                                 isMention = true;
-                                matchedMention = mentionText;
+                                matchedMention = mention;
                                 break;
                             }
                         }
                     }
                 }
 
-                bool isBadWord = BANLIST.Any(badWord => messageText.ToLower().Contains(badWord.ToLower())); // Проверка слова на содержание в бан листе
+                // 2. Проверяем сущности в ПОДПИСИ (для медиа)
+                if (!isMention && update.Message.CaptionEntities != null)
+                {
+                    foreach (var entity in update.Message.CaptionEntities)
+                    {
+                        if (entity.Type == MessageEntityType.Mention)
+                        {
+                            string mention = content.Substring(entity.Offset, entity.Length).ToLower();
+                            if (BANLIST.Contains(mention[1..]))
+                            {
+                                isMention = true;
+                                matchedMention = mention;
+                                break;
+                            }
+                        }
+                    }
+                }
 
-                _logger.LogInformation($"Checks: isMention={isMention} (matched={matchedMention ?? "none"}), isBadWord={isBadWord}");
+                // 3. Проверяем текст/подпись на плохие слова
+                isBadWord = BANLIST.Any(word => 
+                    content.ToLower().Contains(word.ToLower())
+                );
 
-                if (isMention || isBadWord) // Логика при обнаружении слова из бан листа
+                _logger.LogInformation($"Checks: isMention={isMention}, isBadWord={isBadWord}");
+
+                if (isMention || isBadWord)
                 {
                     try
                     {
@@ -90,7 +118,7 @@ namespace TelegramBot
                             messageId: update.Message.MessageId,
                             cancellationToken: cancellationToken);
 
-                        _logger.LogInformation($"Deleted message from @{update.Message.From?.Username ?? "Unknown"}: {messageText}");
+                        _logger.LogInformation($"Deleted message from @{update.Message.From?.Username}");
 
                         /*await botClient.SendMessage(
                             chatId: update.Message.Chat.Id,
@@ -99,12 +127,8 @@ namespace TelegramBot
                     }
                     catch (ApiRequestException ex)
                     {
-                        _logger.LogError($"Error deleting message {update.Message.MessageId}: {ex.Message}");
+                        _logger.LogError($"Delete error: {ex.Message}");
                     }
-                }
-                else
-                {
-                    _logger.LogInformation($"Message not deleted: {messageText}");
                 }
             }
         }
