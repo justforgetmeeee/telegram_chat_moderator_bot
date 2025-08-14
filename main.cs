@@ -9,7 +9,7 @@ namespace TelegramBot
 {
     class Program
     {
-        private static readonly string TOKEN = "8341488531:AAHWLr656LN476mYHpEapn_aAv1eeVmjz0s";
+        private static readonly string TOKEN = "YOUR TOKEN HERE";
         private static List<string> BANLIST = new List<string>();
         private static readonly ILogger<Program> _logger;
 
